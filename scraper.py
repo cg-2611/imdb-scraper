@@ -3,7 +3,9 @@ import requests
 from bs4 import BeautifulSoup
 from enum import Enum
 
+
 URL = "https://www.imdb.com/chart/"
+
 
 class Flags(Enum):
     MOVIE = "movie"
