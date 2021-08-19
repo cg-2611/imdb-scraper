@@ -1,62 +1,44 @@
-import requests
 import sys
 
-from bs4 import BeautifulSoup
-
-
-URL = "https://www.imdb.com/chart/"
+from scraper import Flags
+from scraper import IMDbScraper
 
 
 def get_args() -> tuple:
-    charts_flag = True if "-c" in sys.argv else False
-    popular_flag = True if "-p" in sys.argv else False
-
-    if charts_flag and popular_flag:
-        raise ValueError("cannot set both charts and popular flags, must use one or the other")
-    elif not charts_flag and not popular_flag:
-        raise ValueError("neither charts nor popular flag set, exactly one flag must be set")
-
     movie_flag = True if "-m" in sys.argv else False
     tv_flag = True if "-t" in sys.argv else False
 
-    if movie_flag and tv_flag:
-        raise ValueError("cannot set both movie and tv flags, must use one or the other")
-    elif not movie_flag and not tv_flag:
-        raise ValueError("neither movie nor tv flag set, exactly one flag must be set")
+    if movie_flag and not tv_flag:
+        viewing_medium = Flags.MOVIE
+    elif tv_flag and not movie_flag:
+        viewing_medium = Flags.TV_SHOW
+    else:
+        raise ValueError(f"invalid viewing medium provided, try using the \"-m\" option for {Flags.MOVIE.value}s or \
+                           the \"-t\" option for {Flags.TV_SHOW.value}s")
 
-    return charts_flag, popular_flag, movie_flag, tv_flag
+    top_rated_flag = True if "-c" in sys.argv else False
+    most_popular_flag = True if "-p" in sys.argv else False
 
-def generate_url(flags: tuple) -> str:
-    charts_flag, popular_flag, movie_flag, tv_flag = flags
-    if charts_flag:
-        if movie_flag:
-            return URL + "top/"
-        elif tv_flag:
-            return URL + "toptv/"
-    elif popular_flag:
-        if movie_flag:
-            return URL + "moviemeter/"
-        elif tv_flag:
-            return URL + "tvmeter/"
+    if top_rated_flag and not most_popular_flag:
+        chart_type = Flags.TOP_RATED
+    elif most_popular_flag and not top_rated_flag:
+        chart_type = Flags.MOST_POPULAR
+    else:
+        raise ValueError(f"invalid chart type provided, try using the \"-c\" option for the {Flags.TOP_RATED.value[0]} \
+                           charts or the \"-p\" option for the {Flags.MOST_POPULAR.value[0]} charts")
 
-def get_genres(soup: BeautifulSoup) -> str:
-    genre_list_soup = soup.find("ul", class_="quicklinks")
-    genre_list_items_soup = genre_list_soup.find_all("li", class_="subnav_item_main")
+    genre_index = sys.argv.index("-g") if "-g" in sys.argv else -1
+    genre = sys.argv[genre_index + 1] if genre_index != -1 else None
 
-    for genre in genre_list_items_soup:
-        yield genre.get_text().strip().lower().replace(" ", "-")
+    return viewing_medium, chart_type, genre
 
 def main() -> None:
-    flags = get_args()
+    viewing_medium, chart_type, genre = get_args()
 
-    generated_url = generate_url(flags)
+    scraper = IMDbScraper(viewing_medium, chart_type, genre)
 
-    page = requests.get(generated_url)
-    soup = BeautifulSoup(page.text, "html.parser")
-
-    genres = [genre for genre in get_genres(soup)]
-
-    print(genres)
+    print(scraper.url)
+    print(scraper.genres)
 
 
 if __name__ == "__main__":
