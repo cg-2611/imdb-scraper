@@ -6,14 +6,14 @@ from content import Movie
 from enum import Enum
 
 
-URL = "https://www.imdb.com/chart/"
+URL = "https://www.imdb.com/search/title/"
 
 
 class Types(Enum):
     MOVIE = "movie"
     TV_SHOW = "tv-show"
-    TOP_RATED = ["top-rated", "top", "toptv"]
-    MOST_POPULAR = ["most-popular", "moviemeter", "tvmeter"]
+    TOP_RATED = "top-rated"
+    MOST_POPULAR = "most-popular"
 
 
 class IMDbScraper:
@@ -23,13 +23,10 @@ class IMDbScraper:
         self.genre = genre
         self.votes = votes if votes > 1 else 25000
         self.limit = limit
-
         self.url = self.__get_url()
-
-        self.page = requests.get(self.url)
-        self.soup = BeautifulSoup(self.page.text, "html.parser")
-
         self.genres = [genre for genre in self.__get_genres()]
+
+        print(self.genres)
 
     def __get_url(self) -> str:
         if self.content_type == Types.MOVIE:
@@ -40,11 +37,22 @@ class IMDbScraper:
         return URL + page_name + "/"
 
     def __get_genres(self) -> str:
-        genre_list_soup = self.soup.find("ul", class_="quicklinks")
-        genre_list_items_soup = genre_list_soup.find_all("li", class_="subnav_item_main")
+        genre_table_soup = self.__get_genres_list()
+        genre_list_soup = genre_table_soup.find_all("div", class_="table-cell primary")
 
-        for genre in genre_list_items_soup:
-            yield genre.get_text().strip().lower().replace(" ", "-")
+        for genre in genre_list_soup:
+            yield genre.find("a").get_text().strip().lower().replace(" ", "-")
+
+    def __get_genres_list(self) -> str:
+        genre_page = requests.get("https://www.imdb.com/feature/genre/")
+        genre_page_soup = BeautifulSoup(genre_page.text, "html.parser")
+
+        genre_table_soup = genre_page_soup.find_all("div", class_="ab_links")
+
+        if self.content_type == Types.MOVIE:
+            return genre_table_soup[0]
+        elif self.content_type == Types.TV_SHOW:
+            return genre_table_soup[1]
 
     def __get_movie_information(self, movie_soup: PageElement) -> tuple:
         name = movie_soup.find("a")
@@ -79,7 +87,7 @@ class IMDbScraper:
         movies = []
         i = 1
 
-        url = f"https://www.imdb.com/search/title/?genres={self.genre}&sort=user_rating,desc&title_type=feature&start=%d&num_votes={self.votes},"
+        url = URL + f"?genres={self.genre}&sort=user_rating,desc&title_type=feature&start=%d&num_votes={self.votes},"
 
         page_soup = BeautifulSoup(requests.get(url % i).text, "html.parser")
         total_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")

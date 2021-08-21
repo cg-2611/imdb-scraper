@@ -26,8 +26,8 @@ def get_args() -> tuple:
     elif most_popular_flag and not top_rated_flag:
         ranking_type = Types.MOST_POPULAR
     else:
-        raise ValueError(f"invalid chart type provided, try using the \"-c\" option for the {Types.TOP_RATED.value[0]} \
-                           charts or the \"-p\" option for the {Types.MOST_POPULAR.value[0]} charts")
+        raise ValueError(f"invalid chart type provided, try using the \"-c\" option for the {Types.TOP_RATED.value} \
+                           charts or the \"-p\" option for the {Types.MOST_POPULAR.value} charts")
 
     genre_index = sys.argv.index("-g") if "-g" in sys.argv else -1
     genre = sys.argv[genre_index + 1] if genre_index != -1 else None
