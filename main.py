@@ -32,10 +32,13 @@ def get_args() -> tuple:
     genre_index = sys.argv.index("-g") if "-g" in sys.argv else -1
     genre = sys.argv[genre_index + 1] if genre_index != -1 else None
 
-    limit_index = sys.argv.index("-n") if "-n" in sys.argv else -1
-    limit = int(sys.argv[limit_index + 1]) if limit_index != -1 else 0
+    votes_index = sys.argv.index("-v") if "-v" in sys.argv else -1
+    votes = int(sys.argv[votes_index + 1]) if votes_index != -1 else 0
 
-    return content_type, ranking_type, genre, limit
+    limit_index = sys.argv.index("-n") if "-n" in sys.argv else -1
+    limit = int(sys.argv[limit_index + 1]) if limit_index != -1 else None
+
+    return content_type, ranking_type, genre, votes, limit
 
 def main() -> None:
     scraper = IMDbScraper(*get_args())

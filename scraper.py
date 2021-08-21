@@ -17,10 +17,11 @@ class Types(Enum):
 
 
 class IMDbScraper:
-    def __init__(self, content_type: Types, ranking_type: Types, genre:str, limit: int) -> None:
+    def __init__(self, content_type: Types, ranking_type: Types, genre:str, votes:int, limit: int) -> None:
         self.content_type = content_type
         self.ranking_type = ranking_type
         self.genre = genre
+        self.votes = votes if votes > 1 else 25000
         self.limit = limit
 
         self.url = self.__get_url()
@@ -78,19 +79,21 @@ class IMDbScraper:
         movies = []
         i = 1
 
-        url = "https://www.imdb.com/search/title/?genres={}&sort=user_rating,desc&title_type=feature&start={}&num_votes=25000,"
+        url = f"https://www.imdb.com/search/title/?genres={self.genre}&sort=user_rating,desc&title_type=feature&start=%d&num_votes={self.votes},"
 
-        total_rankings = self.limit
+        page_soup = BeautifulSoup(requests.get(url % i).text, "html.parser")
+        total_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
+        total = [int(x) for x in total_string.split() if x.isdigit()][0]
 
-        if self.limit < 1:
-            page_soup = BeautifulSoup(requests.get(url.format(self.genre, i)).text, "html.parser")
-            total_rankings_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
-            total_rankings = [int(x) for x in total_rankings_string.split() if x.isdigit()][0]
+        if self.limit is None:
+            total_rankings = total
+        else:
+            total_rankings = total if total < self.limit else self.limit
 
         print(f"Searching through {total_rankings} movies...")
 
         while  True:
-            rankings_page = requests.get(url.format(self.genre, i))
+            rankings_page = requests.get(url % i)
             rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
             rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
@@ -98,8 +101,8 @@ class IMDbScraper:
                 ranking_information = self.__get_movie_information(ranking)
                 movie = Movie(*ranking_information)
 
-                if movie.duration > 150:
-                    movies.append(movie)
+                # if movie.duration > 150:
+                movies.append(movie)
 
             i += 50
             if i > total_rankings:
