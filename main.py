@@ -32,18 +32,18 @@ def get_args() -> tuple:
     genre_index = sys.argv.index("-g") if "-g" in sys.argv else -1
     genre = sys.argv[genre_index + 1] if genre_index != -1 else None
 
-    return content_type, ranking_type, genre
+    limit_index = sys.argv.index("-n") if "-n" in sys.argv else -1
+    limit = int(sys.argv[limit_index + 1]) if limit_index != -1 else 0
+
+    return content_type, ranking_type, genre, limit
 
 def main() -> None:
-    content_type, ranking_type, genre = get_args()
-
-    scraper = IMDbScraper(content_type, ranking_type, genre)
+    scraper = IMDbScraper(*get_args())
 
     movie_results = scraper.get_movies()
 
     for result in movie_results:
-        if result.duration > 150:
-            print(f"{result.rank}\t{result.name}\t{result.year}\t{result.rating}\t{result.duration}\t{result.certificate}\t{result.votes}\t{result.gross}")
+        print(f"{result.rank}\t{result.name}\t{result.year}\t{result.rating}\t{result.duration}\t{result.certificate}\t{result.votes}\t{result.gross}")
 
 
 if __name__ == "__main__":

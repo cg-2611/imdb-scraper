@@ -17,10 +17,11 @@ class Types(Enum):
 
 
 class IMDbScraper:
-    def __init__(self, content_type: Types, ranking_type: Types, genre:str) -> None:
+    def __init__(self, content_type: Types, ranking_type: Types, genre:str, limit: int) -> None:
         self.content_type = content_type
         self.ranking_type = ranking_type
         self.genre = genre
+        self.limit = limit
 
         self.url = self.__get_url()
 
@@ -52,7 +53,7 @@ class IMDbScraper:
         year_value = year.get_text().strip() if year is not None else None
 
         rank = movie_soup.find("span", class_="lister-item-index")
-        rank_value = int(rank.get_text().replace(".", "").strip()) if rank is not None else None
+        rank_value = int(rank.get_text().replace(".", "").replace(",", "").strip()) if rank is not None else None
 
         rating = movie_soup.find("span", class_="imdb-rating").find("strong")
         rating_value = float(rating.get_text().strip()) if rating is not None else None
@@ -75,19 +76,34 @@ class IMDbScraper:
 
     def get_movies(self) -> list:
         movies = []
+        i = 1
 
-        url = self.url
+        url = "https://www.imdb.com/search/title/?genres={}&sort=user_rating,desc&title_type=feature&start={}&num_votes=25000,"
 
-        if self.genre in self.genres:
-            url = f"https://www.imdb.com/search/title/?genres={self.genre}&sort=user_rating,desc&title_type=feature&num_votes=25000,"
+        total_rankings = self.limit
 
-        rankings_page = requests.get(url)
-        rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
-        rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
+        if self.limit < 1:
+            page_soup = BeautifulSoup(requests.get(url.format(self.genre, i)).text, "html.parser")
+            total_rankings_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
+            total_rankings = [int(x) for x in total_rankings_string.split() if x.isdigit()][0]
 
-        for ranking in rankings_soup:
-            ranking_information = self.__get_movie_information(ranking)
-            movie = Movie(*ranking_information)
-            movies.append(movie)
+        print(f"Searching through {total_rankings} movies...")
 
+        while  True:
+            rankings_page = requests.get(url.format(self.genre, i))
+            rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
+            rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
+
+            for ranking in rankings_soup:
+                ranking_information = self.__get_movie_information(ranking)
+                movie = Movie(*ranking_information)
+
+                if movie.duration > 150:
+                    movies.append(movie)
+
+            i += 50
+            if i > total_rankings:
+                break
+
+        print(f"Found {len(movies)} matches:")
         return movies
