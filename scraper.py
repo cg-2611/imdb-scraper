@@ -22,11 +22,9 @@ class IMDbScraper:
         self.ranking_type = ranking_type
         self.genre = genre
         self.votes = votes if votes > 1 else 25000
-        self.limit = limit
+        self.limit = limit if limit > 1 else None
         self.url = self.__get_url()
         self.genres = [genre for genre in self.__get_genres()]
-
-        print(self.genres)
 
     def __get_url(self) -> str:
         if self.content_type == Types.MOVIE:
@@ -35,13 +33,6 @@ class IMDbScraper:
             page_name = self.ranking_type.value[2]
 
         return URL + page_name + "/"
-
-    def __get_genres(self) -> str:
-        genre_table_soup = self.__get_genres_list()
-        genre_list_soup = genre_table_soup.find_all("div", class_="table-cell primary")
-
-        for genre in genre_list_soup:
-            yield genre.find("a").get_text().strip().lower().replace(" ", "-")
 
     def __get_genres_list(self) -> str:
         genre_page = requests.get("https://www.imdb.com/feature/genre/")
@@ -53,6 +44,13 @@ class IMDbScraper:
             return genre_table_soup[0]
         elif self.content_type == Types.TV_SHOW:
             return genre_table_soup[1]
+
+    def __get_genres(self) -> str:
+        genre_table_soup = self.__get_genres_list()
+        genre_list_soup = genre_table_soup.find_all("div", class_="table-cell primary")
+
+        for genre in genre_list_soup:
+            yield genre.find("a").get_text().strip().lower().replace(" ", "-")
 
     def __get_movie_information(self, movie_soup: PageElement) -> tuple:
         name = movie_soup.find("a")
@@ -87,7 +85,10 @@ class IMDbScraper:
         movies = []
         i = 1
 
-        url = URL + f"?genres={self.genre}&sort=user_rating,desc&title_type=feature&start=%d&num_votes={self.votes},"
+        if self.ranking_type == Types.TOP_RATED:
+            url = URL + f"?genres={self.genre}&sort=user_rating,desc&title_type=feature&start=%d&num_votes={self.votes},"
+        elif self.ranking_type == Types.MOST_POPULAR:
+            url = URL + f"?genres={self.genre}&title_type=feature&start=%d&num_votes={self.votes},"
 
         page_soup = BeautifulSoup(requests.get(url % i).text, "html.parser")
         total_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
@@ -100,21 +101,24 @@ class IMDbScraper:
 
         print(f"Searching through {total_rankings} movies...")
 
-        while  True:
+        search_complete = False
+        while not search_complete:
             rankings_page = requests.get(url % i)
             rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
             rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
             for ranking in rankings_soup:
+                i += 1
+
                 ranking_information = self.__get_movie_information(ranking)
                 movie = Movie(*ranking_information)
 
                 # if movie.duration > 150:
                 movies.append(movie)
 
-            i += 50
-            if i > total_rankings:
-                break
+                if i > total_rankings:
+                    search_complete = True
+                    break
 
         print(f"Found {len(movies)} matches:")
         return movies

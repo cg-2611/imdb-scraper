@@ -36,7 +36,7 @@ def get_args() -> tuple:
     votes = int(sys.argv[votes_index + 1]) if votes_index != -1 else 0
 
     limit_index = sys.argv.index("-n") if "-n" in sys.argv else -1
-    limit = int(sys.argv[limit_index + 1]) if limit_index != -1 else None
+    limit = int(sys.argv[limit_index + 1]) if limit_index != -1 else 0
 
     return content_type, ranking_type, genre, votes, limit
 
