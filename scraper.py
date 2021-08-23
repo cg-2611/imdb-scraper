@@ -100,9 +100,6 @@ class IMDbScraper:
         name = show_soup.find("a")
         name_value = name.get_text().strip() if name is not None else None
 
-        # year = show_soup.find("span", class_="lister-item-year")
-        # year_value = year.get_text().strip() if year is not None else None
-
         year = show_soup.find("span", class_="lister-item-year").get_text().strip()
 
         start = "".join(filter(str.isdigit, year[:year.find("–")]))
@@ -111,7 +108,7 @@ class IMDbScraper:
         end_value = int(end) if (end) and (end is not None) else None
         year_value = (start_value, end_value)
 
-        discontinued_value = True if year.find("–") == -1 else False
+        discontinued_value = True if (end) or (year.find("–") == -1) else False
 
         rank = show_soup.find("span", class_="lister-item-index")
         rank_value = int(rank.get_text().replace(".", "").replace(",", "").strip()) if rank is not None else None
