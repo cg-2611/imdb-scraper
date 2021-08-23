@@ -1,7 +1,5 @@
 import sys
 
-import requests
-
 from scraper import Types
 from scraper import IMDbScraper
 
@@ -51,7 +49,7 @@ def main() -> None:
     elif args[0] == Types.TV_SHOW:
         tv_show_results = scraper.get_tv_shows()
         for show in tv_show_results:
-                print(f"{show.rank}\t{show.name}\t{show.year}\t{show.rating}\t{show.certificate}\t{show.votes}")
+                print(f"{show.rank}\t{show.name}\t{show.year}\t{show.rating}\t{show.certificate}\t{show.votes}\t{show.discontinued}")
 
 
 

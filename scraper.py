@@ -1,10 +1,12 @@
-from bs4.element import PageElement
 import requests
 
+from enum import Enum
+
 from bs4 import BeautifulSoup
+from bs4 import PageElement
+
 from content import Movie
 from content import Show
-from enum import Enum
 
 
 URL = "https://www.imdb.com/search/title/"
@@ -58,7 +60,7 @@ class IMDbScraper:
     def __get_total_results(self, url: str, start: int) -> int:
         page_soup = BeautifulSoup(requests.get(url % start).text, "html.parser")
         total_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
-        total = [int(x) for x in total_string.split() if x.isdigit()][0]
+        total = int("".join(filter(str.isdigit, total_string[total_string.find("of "):])))
 
         if self.limit is None:
             return total
@@ -70,7 +72,7 @@ class IMDbScraper:
         name_value = name.get_text().strip() if name is not None else None
 
         year = movie_soup.find("span", class_="lister-item-year")
-        year_value = year.get_text().strip() if year is not None else None
+        year_value = int("".join(filter(str.isdigit, year.get_text().strip()))) if year is not None else None
 
         rank = movie_soup.find("span", class_="lister-item-index")
         rank_value = int(rank.get_text().replace(".", "").replace(",", "").strip()) if rank is not None else None
@@ -98,8 +100,18 @@ class IMDbScraper:
         name = show_soup.find("a")
         name_value = name.get_text().strip() if name is not None else None
 
-        year = show_soup.find("span", class_="lister-item-year")
-        year_value = year.get_text().strip() if year is not None else None
+        # year = show_soup.find("span", class_="lister-item-year")
+        # year_value = year.get_text().strip() if year is not None else None
+
+        year = show_soup.find("span", class_="lister-item-year").get_text().strip()
+
+        start = "".join(filter(str.isdigit, year[:year.find("–")]))
+        end = "".join(filter(str.isdigit, year[year.find("–"):]))
+        start_value = int(start) if (start) and (start is not None) else None
+        end_value = int(end) if (end) and (end is not None) else None
+        year_value = (start_value, end_value)
+
+        discontinued_value = True if year.find("–") == -1 else False
 
         rank = show_soup.find("span", class_="lister-item-index")
         rank_value = int(rank.get_text().replace(".", "").replace(",", "").strip()) if rank is not None else None
@@ -114,7 +126,7 @@ class IMDbScraper:
         votes_value = int(votes_and_gross[0].get("data-value"))
 
 
-        return name_value, year_value, rank_value, rating_value, certificate_value, votes_value
+        return name_value, year_value, discontinued_value, rank_value, rating_value, certificate_value, votes_value
 
     def get_movies(self) -> list:
         movies = []
@@ -136,8 +148,6 @@ class IMDbScraper:
 
                 ranking_information = self.__get_movie_information(ranking)
                 movie = Movie(*ranking_information)
-
-                # if movie.duration > 150:
                 movies.append(movie)
 
                 if i > total_rankings:
