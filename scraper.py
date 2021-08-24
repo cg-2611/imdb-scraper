@@ -193,7 +193,7 @@ class IMDbScraper:
         else:
             print("Filter Options:", filter_string)
 
-        print(f"Searching through {total_rankings} movies...")
+        print(f"\nSearching through {total_rankings} movies...")
 
         search_complete = False
         while not search_complete:
@@ -255,7 +255,6 @@ class IMDbScraper:
         if rating_filter is not None:
             filter_string += f"\n\tmovie rating is {rating_filter[0]} {rating_filter[1]}"
 
-        print(discontinued_filter)
         if discontinued_filter is not None:
             if discontinued_filter != False:
                 filter_string += f"\n\tincluding discontinued shows"
@@ -267,7 +266,7 @@ class IMDbScraper:
         else:
             print("Filter Options:", filter_string)
 
-        print(f"Searching through {total_rankings} shows...")
+        print(f"\nSearching through {total_rankings} shows...")
 
         search_complete = False
         while not search_complete:
