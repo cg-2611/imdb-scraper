@@ -20,7 +20,7 @@ class Types(Enum):
 
 
 class IMDbScraper:
-    def __init__(self, content_type: Types, ranking_type: Types, genre:str, votes:int, limit: int) -> None:
+    def __init__(self, content_type: Types, ranking_type: Types, genre:str, votes:int, limit: int, filter: str) -> None:
         self.content_type = content_type
         self.ranking_type = ranking_type
         self.genre = genre
@@ -32,6 +32,8 @@ class IMDbScraper:
 
         self.limit = limit if limit > 1 else None
         self.genres = [genre for genre in self.__get_genres()]
+
+        self.filter = filter
 
     def __get_url(self) -> str:
         if self.ranking_type == Types.TOP_RATED:
@@ -67,6 +69,50 @@ class IMDbScraper:
         else:
             return total if total < self.limit else self.limit
 
+    def __get_movie_filter_options(self) -> tuple:
+        year_filter, rating_filter, duration_filter = None, None, None
+
+        if self.filter is not None:
+            filter_options = self.filter.split()
+
+            for option in filter_options:
+                if option.startswith("y"):
+                    year_filter = [option[1], int(option[2:])]
+                    continue
+
+                if option.startswith("r"):
+                    rating_filter = [option[1], float(option[2:])]
+                    continue
+
+                if option.startswith("d"):
+                    duration_filter = [option[1], int(option[2:])]
+                    continue
+
+        return (year_filter, rating_filter, duration_filter)
+
+    def __get_tv_show_filter_options(self) -> tuple:
+        year_filter, rating_filter, discontinued_filter = None, None, None
+
+        if self.filter is not None:
+            filter_options = self.filter.split()
+
+            for option in filter_options:
+                if option.startswith("y"):
+                    year_filter = [option[1], int(option[2:])]
+                    continue
+
+                if option.startswith("r"):
+                    rating_filter = [option[1], float(option[2:])]
+                    continue
+
+                if option.startswith("d"):
+                    value_index = option.find("=")
+                    value = option[value_index + 1:]
+                    discontinued_filter = False if value == "False" else True
+                    continue
+
+        return (year_filter, rating_filter, discontinued_filter)
+
     def __get_movie_information(self, movie_soup: PageElement) -> tuple:
         name = movie_soup.find("a")
         name_value = name.get_text().strip() if name is not None else None
@@ -77,7 +123,7 @@ class IMDbScraper:
         rank = movie_soup.find("span", class_="lister-item-index")
         rank_value = int(rank.get_text().replace(".", "").replace(",", "").strip()) if rank is not None else None
 
-        rating = movie_soup.find("span", class_="imdb-rating").find("strong")
+        rating = movie_soup.find("div", class_="ratings-imdb-rating").find("strong")
         rating_value = float(rating.get_text().strip()) if rating is not None else None
 
         duration = movie_soup.find("span", class_="runtime")
@@ -113,7 +159,7 @@ class IMDbScraper:
         rank = show_soup.find("span", class_="lister-item-index")
         rank_value = int(rank.get_text().replace(".", "").replace(",", "").strip()) if rank is not None else None
 
-        rating = show_soup.find("span", class_="imdb-rating").find("strong")
+        rating = show_soup.find("div", class_="ratings-imdb-rating").find("strong")
         rating_value = float(rating.get_text().strip()) if rating is not None else None
 
         certificate = show_soup.find("span", class_="certificate")
@@ -121,7 +167,6 @@ class IMDbScraper:
 
         votes_and_gross = show_soup.find("p", class_="sort-num_votes-visible").find_all("span", attrs={'name':'nv'})
         votes_value = int(votes_and_gross[0].get("data-value"))
-
 
         return name_value, year_value, discontinued_value, rank_value, rating_value, certificate_value, votes_value
 
@@ -131,6 +176,22 @@ class IMDbScraper:
 
         url = self.__get_url()
         total_rankings = self.__get_total_results(url, 1)
+        year_filter, rating_filter, duration_filter = self.__get_movie_filter_options()
+        filter_string = ""
+
+        if year_filter is not None:
+            filter_string += f"\n\tmovie year is {year_filter[0]} {year_filter[1]}"
+
+        if rating_filter is not None:
+            filter_string += f"\n\tmovie rating is {rating_filter[0]} {rating_filter[1]}"
+
+        if duration_filter is not None:
+            filter_string += f"\n\tmovie duration is {duration_filter[0]} {duration_filter[1]}"
+
+        if not filter_string:
+            print("Filter Options:\n\tNone")
+        else:
+            print("Filter Options:", filter_string)
 
         print(f"Searching through {total_rankings} movies...")
 
@@ -141,15 +202,40 @@ class IMDbScraper:
             rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
             for ranking in rankings_soup:
+                if i > total_rankings:
+                    search_complete = True
+                    break
+
                 i += 1
 
                 ranking_information = self.__get_movie_information(ranking)
                 movie = Movie(*ranking_information)
-                movies.append(movie)
 
-                if i > total_rankings:
-                    search_complete = True
-                    break
+                if year_filter is not None:
+                    if year_filter[0] == ">":
+                        if movie.year < year_filter[1]:
+                            continue
+                    elif year_filter[0] == "<":
+                        if movie.year > year_filter[1]:
+                            continue
+
+                if rating_filter is not None:
+                    if rating_filter[0] == ">":
+                        if movie.rating < rating_filter[1]:
+                            continue
+                    elif rating_filter[0] == "<":
+                        if movie.rating > rating_filter[1]:
+                            continue
+
+                if duration_filter is not None:
+                    if duration_filter[0] == ">":
+                        if movie.duration < duration_filter[1]:
+                            continue
+                    elif duration_filter[0] == "<":
+                        if movie.duration > duration_filter[1]:
+                            continue
+
+                movies.append(movie)
 
         print(f"Found {len(movies)} matches:")
         return movies
@@ -160,6 +246,26 @@ class IMDbScraper:
 
         url = self.__get_url()
         total_rankings = self.__get_total_results(url, 1)
+        year_filter, rating_filter, discontinued_filter = self.__get_tv_show_filter_options()
+        filter_string = ""
+
+        if year_filter is not None:
+            filter_string += f"\n\tmovie year is {year_filter[0]} {year_filter[1]}"
+
+        if rating_filter is not None:
+            filter_string += f"\n\tmovie rating is {rating_filter[0]} {rating_filter[1]}"
+
+        print(discontinued_filter)
+        if discontinued_filter is not None:
+            if discontinued_filter != False:
+                filter_string += f"\n\tincluding discontinued shows"
+            else:
+                filter_string += f"\n\tnot including discontinued shows"
+
+        if not filter_string:
+            print("Filter Options:\n\tNone")
+        else:
+            print("Filter Options:", filter_string)
 
         print(f"Searching through {total_rankings} shows...")
 
@@ -170,15 +276,37 @@ class IMDbScraper:
             rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
             for ranking in rankings_soup:
+                if i > total_rankings:
+                    search_complete = True
+                    break
+
                 i += 1
 
                 ranking_information = self.__get_tv_show_information(ranking)
                 show = Show(*ranking_information)
-                shows.append(show)
 
-                if i > total_rankings:
-                    search_complete = True
-                    break
+                if year_filter is not None:
+                    if year_filter[0] == ">":
+                        if show.year[0] < year_filter[1]:
+                            continue
+                    elif year_filter[0] == "<":
+                        if show.year[0] > year_filter[1]:
+                            continue
+
+                if rating_filter is not None:
+                    if rating_filter[0] == ">":
+                        if show.rating < rating_filter[1]:
+                            continue
+                    elif rating_filter[0] == "<":
+                        if show.rating > rating_filter[1]:
+                            continue
+
+                if discontinued_filter is not None:
+                    if discontinued_filter == False:
+                        if show.discontinued != discontinued_filter:
+                            continue
+
+                shows.append(show)
 
         print(f"Found {len(shows)} matches:")
         return shows
