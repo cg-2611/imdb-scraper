@@ -195,17 +195,15 @@ class IMDbScraper:
 
         print(f"\nSearching through {total_rankings} movies...")
 
-        search_complete = False
-        while not search_complete:
+        while True:
             rankings_page = requests.get(url % i)
             rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
             rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
-            for ranking in rankings_soup:
-                if i > total_rankings:
-                    search_complete = True
-                    break
+            if i > total_rankings:
+                break
 
+            for ranking in rankings_soup:
                 i += 1
 
                 ranking_information = self.__get_movie_information(ranking)
@@ -250,10 +248,10 @@ class IMDbScraper:
         filter_string = ""
 
         if year_filter is not None:
-            filter_string += f"\n\tmovie year is {year_filter[0]} {year_filter[1]}"
+            filter_string += f"\n\show start year is {year_filter[0]} {year_filter[1]}"
 
         if rating_filter is not None:
-            filter_string += f"\n\tmovie rating is {rating_filter[0]} {rating_filter[1]}"
+            filter_string += f"\n\show rating is {rating_filter[0]} {rating_filter[1]}"
 
         if discontinued_filter is not None:
             if discontinued_filter != False:
@@ -268,16 +266,15 @@ class IMDbScraper:
 
         print(f"\nSearching through {total_rankings} shows...")
 
-        search_complete = False
-        while not search_complete:
+        while True:
             rankings_page = requests.get(url % i)
             rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
             rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
+            if i > total_rankings:
+                break
+
             for ranking in rankings_soup:
-                if i > total_rankings:
-                    search_complete = True
-                    break
 
                 i += 1
 

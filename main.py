@@ -41,18 +41,66 @@ def get_args() -> tuple:
 
     return content_type, ranking_type, genre, votes, limit, filter
 
+def print_movies(movies: list) -> None:
+    if movies:
+        max_length = max(len(movie.name) for movie in movies)
+
+    tab_characters = (max_length // 8) + 1
+    name_header = "Name" + ("\t" * tab_characters)
+
+    headings = f"\tRank\t {name_header} Year\t Rating Duration Cert.\t Votes\t Gross"
+
+    print(headings)
+    print()
+
+    for i, movie in enumerate(movies):
+        if (len(movie.name) + 1) % 8 == 0:
+            name_string = movie.name + ("\t" * ((tab_characters - (len(movie.name) // 8)) - 1))
+        else:
+            name_string = movie.name + ("\t" * (tab_characters - (len(movie.name) // 8)))
+
+        if len(str(movie.votes)) < 7:
+            votes_string = str(movie.votes) + "\t"
+        else:
+            votes_string = str(movie.votes)
+
+        if movie.gross is not None:
+            gross_string = "$" + str(movie.gross)
+        else:
+            gross_string = str(movie.gross)
+
+        print(f"{i + 1}.\t{movie.rank}\t {name_string} {movie.year}\t {movie.rating}\t{movie.duration}\t {movie.certificate}\t {votes_string} {gross_string}")
+
+def print_shows(shows: list) -> None:
+    if shows:
+        max_length = max(len(show.name) for show in shows)
+
+    tab_characters = (max_length // 8) + 1
+    name_header = "Name" + ("\t" * tab_characters)
+
+    headings = f"\tRank\t {name_header} Start End\t Rating Cert.\t Discont. Votes"
+
+    print(headings)
+    print()
+
+    for i, show in enumerate(shows):
+        if (len(show.name) + 1) % 8 == 0:
+            name_string = show.name + ("\t" * ((tab_characters - (len(show.name) // 8)) - 1))
+        else:
+            name_string = show.name + ("\t" * (tab_characters - (len(show.name) // 8)))
+
+        print(f"{i + 1}.\t{show.rank}\t {name_string} {show.year[0]}  {show.year[1]}\t {show.rating}\t {show.certificate}\t {show.discontinued}\t  {show.votes}")
+
 def main() -> None:
     args = get_args()
     scraper = IMDbScraper(*args)
 
     if args[0] == Types.MOVIE:
         movie_results = scraper.get_movies()
-        for movie in movie_results:
-            print(f"{movie.rank}\t{movie.name}\t{movie.year}\t{movie.rating}\t{movie.duration}\t{movie.certificate}\t{movie.votes}\t{movie.gross}")
+        print_movies(movie_results)
     elif args[0] == Types.TV_SHOW:
         tv_show_results = scraper.get_tv_shows()
-        for show in tv_show_results:
-            print(f"{show.rank}\t{show.name}\t{show.year}\t{show.rating}\t{show.certificate}\t{show.votes}\t{show.discontinued}")
+        print_shows(tv_show_results)
 
 
 
