@@ -1,4 +1,5 @@
 import requests
+import threading
 
 from enum import Enum
 
@@ -170,13 +171,53 @@ class IMDbScraper:
 
         return name_value, year_value, discontinued_value, rank_value, rating_value, certificate_value, votes_value
 
+    def __search_movies(self, lock, url, index, movies, filters) -> None:
+        start = (index * 50) + 1
+        rankings_page = requests.get(url % start)
+        rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
+        rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
+
+        year_filter, rating_filter, duration_filter = filters
+
+        for ranking in rankings_soup:
+            ranking_information = self.__get_movie_information(ranking)
+            movie = Movie(*ranking_information)
+
+            if year_filter is not None:
+                if year_filter[0] == ">":
+                    if movie.year < year_filter[1]:
+                        continue
+                elif year_filter[0] == "<":
+                    if movie.year > year_filter[1]:
+                        continue
+
+            if rating_filter is not None:
+                if rating_filter[0] == ">":
+                    if movie.rating < rating_filter[1]:
+                        continue
+                elif rating_filter[0] == "<":
+                    if movie.rating > rating_filter[1]:
+                        continue
+
+            if duration_filter is not None:
+                if duration_filter[0] == ">":
+                    if movie.duration < duration_filter[1]:
+                        continue
+                elif duration_filter[0] == "<":
+                    if movie.duration > duration_filter[1]:
+                        continue
+
+            with lock:
+                movies.append(movie)
+
+
     def get_movies(self) -> list:
         movies = []
-        i = 1
 
         url = self.__get_url()
         total_rankings = self.__get_total_results(url, 1)
-        year_filter, rating_filter, duration_filter = self.__get_movie_filter_options()
+        filters = self.__get_movie_filter_options()
+        year_filter, rating_filter, duration_filter = filters
         filter_string = ""
 
         if year_filter is not None:
@@ -195,47 +236,18 @@ class IMDbScraper:
 
         print(f"\nSearching through {total_rankings} movies...")
 
-        while True:
-            rankings_page = requests.get(url % i)
-            rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
-            rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
+        thread_number = total_rankings // 50 if total_rankings % 50 == 0 else (total_rankings // 50) + 1
 
-            if i > total_rankings:
-                break
+        lock = threading.Lock()
+        threads = [threading.Thread(target=self.__search_movies, args=(lock, url, i, movies, filters)) for i in range(thread_number)]
 
-            for ranking in rankings_soup:
-                i += 1
+        for thread in threads:
+            thread.start()
 
-                ranking_information = self.__get_movie_information(ranking)
-                movie = Movie(*ranking_information)
+        for thread in threads:
+            thread.join()
 
-                if year_filter is not None:
-                    if year_filter[0] == ">":
-                        if movie.year < year_filter[1]:
-                            continue
-                    elif year_filter[0] == "<":
-                        if movie.year > year_filter[1]:
-                            continue
-
-                if rating_filter is not None:
-                    if rating_filter[0] == ">":
-                        if movie.rating < rating_filter[1]:
-                            continue
-                    elif rating_filter[0] == "<":
-                        if movie.rating > rating_filter[1]:
-                            continue
-
-                if duration_filter is not None:
-                    if duration_filter[0] == ">":
-                        if movie.duration < duration_filter[1]:
-                            continue
-                    elif duration_filter[0] == "<":
-                        if movie.duration > duration_filter[1]:
-                            continue
-
-                movies.append(movie)
-
-        print(f"Found {len(movies)} matches:")
+        print(f"Found {len(movies)} matches:\n")
         return movies
 
     def get_tv_shows(self) -> list:
@@ -248,10 +260,10 @@ class IMDbScraper:
         filter_string = ""
 
         if year_filter is not None:
-            filter_string += f"\n\show start year is {year_filter[0]} {year_filter[1]}"
+            filter_string += f"\n\tshow start year is {year_filter[0]} {year_filter[1]}"
 
         if rating_filter is not None:
-            filter_string += f"\n\show rating is {rating_filter[0]} {rating_filter[1]}"
+            filter_string += f"\n\tshow rating is {rating_filter[0]} {rating_filter[1]}"
 
         if discontinued_filter is not None:
             if discontinued_filter != False:
@@ -304,5 +316,5 @@ class IMDbScraper:
 
                 shows.append(show)
 
-        print(f"Found {len(shows)} matches:")
+        print(f"Found {len(shows)} matches:\n")
         return shows

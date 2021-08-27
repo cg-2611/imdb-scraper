@@ -75,21 +75,23 @@ def print_shows(shows: list) -> None:
     if shows:
         max_length = max(len(show.name) for show in shows)
 
-    tab_characters = (max_length // 8) + 1
-    name_header = "Name" + ("\t" * tab_characters)
+        tab_characters = (max_length // 8) + 1
+        name_header = "Name" + ("\t" * tab_characters)
 
-    headings = f"\tRank\t {name_header} Start End\t Rating Cert.\t Discont. Votes"
+        headings = f"\tRank\t {name_header} Start End\t Rating Cert.\t Discont. Votes"
 
-    print(headings)
-    print()
+        print(headings)
+        print()
 
-    for i, show in enumerate(shows):
-        if (len(show.name) + 1) % 8 == 0:
-            name_string = show.name + ("\t" * ((tab_characters - (len(show.name) // 8)) - 1))
-        else:
-            name_string = show.name + ("\t" * (tab_characters - (len(show.name) // 8)))
+        for i, show in enumerate(shows):
+            if (len(show.name) + 1) % 8 == 0:
+                name_string = show.name + ("\t" * ((tab_characters - (len(show.name) // 8)) - 1))
+            else:
+                name_string = show.name + ("\t" * (tab_characters - (len(show.name) // 8)))
 
-        print(f"{i + 1}.\t{show.rank}\t {name_string} {show.year[0]}  {show.year[1]}\t {show.rating}\t {show.certificate}\t {show.discontinued}\t  {show.votes}")
+            print(f"{i + 1}.\t{show.rank}\t {name_string} {show.year[0]}  {show.year[1]}\t {show.rating}\t {show.certificate}\t {show.discontinued}\t  {show.votes}")
+    else:
+        print("No matches")
 
 def main() -> None:
     args = get_args()
