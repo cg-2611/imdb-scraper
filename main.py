@@ -77,6 +77,8 @@ def print_movies(movies: list) -> None:
 
 def print_shows(shows: list) -> None:
     if shows:
+        print(f"Found {len(shows)} matches:\n")
+
         max_length = max(len(show.name) for show in shows)
 
         tab_characters = (max_length // 8) + 1

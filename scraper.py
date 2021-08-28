@@ -35,83 +35,177 @@ class IMDbScraper:
         self.genres = [genre for genre in self.__get_genres()]
         self.filter = filter
 
-    def __get_url(self) -> str:
-        if self.ranking_type == Types.TOP_RATED:
-            return URL + f"?genres={self.genre}&sort=user_rating,desc&title_type={self.content_type.value[1]}&start=%d&num_votes={self.votes},"
-        elif self.ranking_type == Types.MOST_POPULAR:
-            return URL + f"?genres={self.genre}&title_type={self.content_type.value[1]}&start=%d&num_votes={self.votes},"
+    def get_movies(self) -> list:
+        movies = []
 
-    def __get_genres_list(self) -> str:
-        genre_page = requests.get("https://www.imdb.com/feature/genre/")
-        genre_page_soup = BeautifulSoup(genre_page.text, "html.parser")
+        url = self.__get_url()
+        total_rankings = self.__get_total_results(url, 1)
+        filters = self.__get_movie_filter_options()
+        year_filter, rating_filter, duration_filter = filters
+        filter_string = ""
 
-        genre_table_soup = genre_page_soup.find_all("div", class_="ab_links")
+        if year_filter is not None:
+            filter_string += f"\n\tmovie year is {year_filter[0]} {year_filter[1]}"
 
-        if self.content_type == Types.MOVIE:
-            return genre_table_soup[0]
-        elif self.content_type == Types.TV_SHOW:
-            return genre_table_soup[1]
+        if rating_filter is not None:
+            filter_string += f"\n\tmovie rating is {rating_filter[0]} {rating_filter[1]}"
 
-    def __get_genres(self) -> str:
-        genre_table_soup = self.__get_genres_list()
-        genre_list_soup = genre_table_soup.find_all("div", class_="table-cell primary")
+        if duration_filter is not None:
+            filter_string += f"\n\tmovie duration is {duration_filter[0]} {duration_filter[1]}"
 
-        for genre in genre_list_soup:
-            yield genre.find("a").get_text().strip().lower().replace(" ", "-")
-
-    def __get_total_results(self, url: str, start: int) -> int:
-        page_soup = BeautifulSoup(requests.get(url % start).text, "html.parser")
-        total_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
-        total = int("".join(filter(str.isdigit, total_string[total_string.find("of "):])))
-
-        if self.limit is None:
-            return total
+        if not filter_string:
+            print("Filter Options:\n\tNone")
         else:
-            return total if total < self.limit else self.limit
+            print("Filter Options:", filter_string)
 
-    def __get_movie_filter_options(self) -> tuple:
-        year_filter, rating_filter, duration_filter = None, None, None
+        print(f"\nSearching through {total_rankings} movies...")
 
-        if self.filter is not None:
-            filter_options = self.filter.split()
+        thread_number = total_rankings // 50 if total_rankings % 50 == 0 else (total_rankings // 50) + 1
+        total = total_rankings - ((thread_number - 1) * 50)
+        threads = [threading.Thread(target=self.__search_movies, args=(url, movies, filters, 50)) for _ in range(thread_number - 1)]
+        threads.append(threading.Thread(target=self.__search_movies, args=(url, movies, filters, total)))
 
-            for option in filter_options:
-                if option.startswith("y"):
-                    year_filter = [option[1], int(option[2:])]
-                    continue
+        for thread in threads:
+            thread.start()
 
-                if option.startswith("r"):
-                    rating_filter = [option[1], float(option[2:])]
-                    continue
+        for thread in threads:
+            thread.join()
 
-                if option.startswith("d"):
-                    duration_filter = [option[1], int(option[2:])]
-                    continue
+        movies.sort(key=lambda movie: movie.rank)
 
-        return (year_filter, rating_filter, duration_filter)
+        return movies
 
-    def __get_tv_show_filter_options(self) -> tuple:
-        year_filter, rating_filter, discontinued_filter = None, None, None
+    def get_tv_shows(self) -> list:
+        shows = []
 
-        if self.filter is not None:
-            filter_options = self.filter.split()
+        url = self.__get_url()
+        total_rankings = self.__get_total_results(url, 1)
+        filters = self.__get_tv_show_filter_options()
+        year_filter, rating_filter, discontinued_filter = filters
+        filter_string = ""
 
-            for option in filter_options:
-                if option.startswith("y"):
-                    year_filter = [option[1], int(option[2:])]
-                    continue
+        if year_filter is not None:
+            filter_string += f"\n\tshow start year is {year_filter[0]} {year_filter[1]}"
 
-                if option.startswith("r"):
-                    rating_filter = [option[1], float(option[2:])]
-                    continue
+        if rating_filter is not None:
+            filter_string += f"\n\tshow rating is {rating_filter[0]} {rating_filter[1]}"
 
-                if option.startswith("d"):
-                    value_index = option.find("=")
-                    value = option[value_index + 1:]
-                    discontinued_filter = False if value == "False" else True
-                    continue
+        if discontinued_filter is not None:
+            if discontinued_filter != False:
+                filter_string += f"\n\tincluding discontinued shows"
+            else:
+                filter_string += f"\n\tnot including discontinued shows"
 
-        return (year_filter, rating_filter, discontinued_filter)
+        if not filter_string:
+            print("Filter Options:\n\tNone")
+        else:
+            print("Filter Options:", filter_string)
+
+        print(f"\nSearching through {total_rankings} shows...")
+
+        thread_number = total_rankings // 50 if total_rankings % 50 == 0 else (total_rankings // 50) + 1
+        total = total_rankings - ((thread_number - 1) * 50)
+        threads = [threading.Thread(target=self.__search_shows, args=(url, shows, filters, 50)) for _ in range(thread_number - 1)]
+        threads.append(threading.Thread(target=self.__search_shows, args=(url, shows, filters, total)))
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        shows.sort(key=lambda show: show.rank)
+
+        return shows
+
+    def __search_movies(self, url: str, movies: list, filters: tuple, total: int) -> None:
+        current_thread = threading.current_thread()
+        index = int("".join(filter(str.isdigit, current_thread.name))) - 1
+        start = (index * 50) + 1
+
+        rankings_page = requests.get(url % start)
+        rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
+        rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
+
+        year_filter, rating_filter, duration_filter = filters
+
+        i = 0
+        for ranking in rankings_soup:
+            i += 1
+            if i > total:
+                break
+
+            ranking_information = self.__get_movie_information(ranking)
+            movie = Movie(*ranking_information)
+
+            if year_filter is not None:
+                if year_filter[0] == ">":
+                    if movie.year < year_filter[1]:
+                        continue
+                elif year_filter[0] == "<":
+                    if movie.year > year_filter[1]:
+                        continue
+
+            if rating_filter is not None:
+                if rating_filter[0] == ">":
+                    if movie.rating < rating_filter[1]:
+                        continue
+                elif rating_filter[0] == "<":
+                    if movie.rating > rating_filter[1]:
+                        continue
+
+            if duration_filter is not None:
+                if duration_filter[0] == ">":
+                    if movie.duration < duration_filter[1]:
+                        continue
+                elif duration_filter[0] == "<":
+                    if movie.duration > duration_filter[1]:
+                        continue
+
+            movies.append(movie)
+
+    def __search_shows(self, url: str, shows: list, filters: tuple, total: int) -> None:
+        current_thread = threading.current_thread()
+        index = int("".join(filter(str.isdigit, current_thread.name))) - 1
+        start = (index * 50) + 1
+
+        rankings_page = requests.get(url % start)
+        rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
+        rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
+
+        year_filter, rating_filter, discontinued_filter = filters
+
+        i = 0
+        for ranking in rankings_soup:
+            i += 1
+            if i > total:
+                break
+
+            ranking_information = self.__get_tv_show_information(ranking)
+            show = Show(*ranking_information)
+
+            if year_filter is not None:
+                if year_filter[0] == ">":
+                    if show.year[0] < year_filter[1]:
+                        continue
+                elif year_filter[0] == "<":
+                    if show.year[0] > year_filter[1]:
+                        continue
+
+            if rating_filter is not None:
+                if rating_filter[0] == ">":
+                    if show.rating < rating_filter[1]:
+                        continue
+                elif rating_filter[0] == "<":
+                    if show.rating > rating_filter[1]:
+                        continue
+
+            if discontinued_filter is not None:
+                if discontinued_filter == False:
+                    if show.discontinued != discontinued_filter:
+                        continue
+
+            shows.append(show)
 
     def __get_movie_information(self, movie_soup: PageElement) -> tuple:
         name = movie_soup.find("a")
@@ -170,158 +264,80 @@ class IMDbScraper:
 
         return name_value, year_value, discontinued_value, rank_value, rating_value, certificate_value, votes_value
 
-    def __search_movies(self, url: str, movies: list, filters: tuple, total: int) -> None:
-        current_thread = threading.current_thread()
-        index = int("".join(filter(str.isdigit, current_thread.name))) - 1
-        start = (index * 50) + 1
+    def __get_url(self) -> str:
+        if self.ranking_type == Types.TOP_RATED:
+            return URL + f"?genres={self.genre}&sort=user_rating,desc&title_type={self.content_type.value[1]}&start=%d&num_votes={self.votes},"
+        elif self.ranking_type == Types.MOST_POPULAR:
+            return URL + f"?genres={self.genre}&title_type={self.content_type.value[1]}&start=%d&num_votes={self.votes},"
 
-        rankings_page = requests.get(url % start)
-        rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
-        rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
+    def __get_genres(self) -> str:
+        genre_table_soup = self.__get_genres_list()
+        genre_list_soup = genre_table_soup.find_all("div", class_="table-cell primary")
 
-        year_filter, rating_filter, duration_filter = filters
+        for genre in genre_list_soup:
+            yield genre.find("a").get_text().strip().lower().replace(" ", "-")
 
-        i = 0
-        for ranking in rankings_soup:
-            i += 1
-            if i > total:
-                break
+    def __get_genres_list(self) -> str:
+        genre_page = requests.get("https://www.imdb.com/feature/genre/")
+        genre_page_soup = BeautifulSoup(genre_page.text, "html.parser")
 
-            ranking_information = self.__get_movie_information(ranking)
-            movie = Movie(*ranking_information)
+        genre_table_soup = genre_page_soup.find_all("div", class_="ab_links")
 
-            if year_filter is not None:
-                if year_filter[0] == ">":
-                    if movie.year < year_filter[1]:
-                        continue
-                elif year_filter[0] == "<":
-                    if movie.year > year_filter[1]:
-                        continue
+        if self.content_type == Types.MOVIE:
+            return genre_table_soup[0]
+        elif self.content_type == Types.TV_SHOW:
+            return genre_table_soup[1]
 
-            if rating_filter is not None:
-                if rating_filter[0] == ">":
-                    if movie.rating < rating_filter[1]:
-                        continue
-                elif rating_filter[0] == "<":
-                    if movie.rating > rating_filter[1]:
-                        continue
+    def __get_total_results(self, url: str, start: int) -> int:
+        page_soup = BeautifulSoup(requests.get(url % start).text, "html.parser")
+        total_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
+        total = int("".join(filter(str.isdigit, total_string[total_string.find("of "):])))
 
-            if duration_filter is not None:
-                if duration_filter[0] == ">":
-                    if movie.duration < duration_filter[1]:
-                        continue
-                elif duration_filter[0] == "<":
-                    if movie.duration > duration_filter[1]:
-                        continue
-
-            movies.append(movie)
-
-
-    def get_movies(self) -> list:
-        movies = []
-
-        url = self.__get_url()
-        total_rankings = self.__get_total_results(url, 1)
-        filters = self.__get_movie_filter_options()
-        year_filter, rating_filter, duration_filter = filters
-        filter_string = ""
-
-        if year_filter is not None:
-            filter_string += f"\n\tmovie year is {year_filter[0]} {year_filter[1]}"
-
-        if rating_filter is not None:
-            filter_string += f"\n\tmovie rating is {rating_filter[0]} {rating_filter[1]}"
-
-        if duration_filter is not None:
-            filter_string += f"\n\tmovie duration is {duration_filter[0]} {duration_filter[1]}"
-
-        if not filter_string:
-            print("Filter Options:\n\tNone")
+        if self.limit is None:
+            return total
         else:
-            print("Filter Options:", filter_string)
+            return total if total < self.limit else self.limit
 
-        print(f"\nSearching through {total_rankings} movies...")
+    def __get_movie_filter_options(self) -> tuple:
+        year_filter, rating_filter, duration_filter = None, None, None
 
-        thread_number = total_rankings // 50 if total_rankings % 50 == 0 else (total_rankings // 50) + 1
-        total = total_rankings - ((thread_number - 1) * 50)
-        threads = [threading.Thread(target=self.__search_movies, args=(url, movies, filters, 50)) for _ in range(thread_number - 1)]
-        threads.append(threading.Thread(target=self.__search_movies, args=(url, movies, filters, total)))
+        if self.filter is not None:
+            filter_options = self.filter.split()
 
-        for thread in threads:
-            thread.start()
+            for option in filter_options:
+                if option.startswith("y"):
+                    year_filter = [option[1], int(option[2:])]
+                    continue
 
-        for thread in threads:
-            thread.join()
+                if option.startswith("r"):
+                    rating_filter = [option[1], float(option[2:])]
+                    continue
 
-        movies.sort(key=lambda movie: movie.rank)
+                if option.startswith("d"):
+                    duration_filter = [option[1], int(option[2:])]
+                    continue
 
-        return movies
+        return (year_filter, rating_filter, duration_filter)
 
-    def get_tv_shows(self) -> list:
-        shows = []
-        i = 1
+    def __get_tv_show_filter_options(self) -> tuple:
+        year_filter, rating_filter, discontinued_filter = None, None, None
 
-        url = self.__get_url()
-        total_rankings = self.__get_total_results(url, 1)
-        year_filter, rating_filter, discontinued_filter = self.__get_tv_show_filter_options()
-        filter_string = ""
+        if self.filter is not None:
+            filter_options = self.filter.split()
 
-        if year_filter is not None:
-            filter_string += f"\n\tshow start year is {year_filter[0]} {year_filter[1]}"
+            for option in filter_options:
+                if option.startswith("y"):
+                    year_filter = [option[1], int(option[2:])]
+                    continue
 
-        if rating_filter is not None:
-            filter_string += f"\n\tshow rating is {rating_filter[0]} {rating_filter[1]}"
+                if option.startswith("r"):
+                    rating_filter = [option[1], float(option[2:])]
+                    continue
 
-        if discontinued_filter is not None:
-            if discontinued_filter != False:
-                filter_string += f"\n\tincluding discontinued shows"
-            else:
-                filter_string += f"\n\tnot including discontinued shows"
+                if option.startswith("d"):
+                    value_index = option.find("=")
+                    value = option[value_index + 1:]
+                    discontinued_filter = False if value == "False" else True
+                    continue
 
-        if not filter_string:
-            print("Filter Options:\n\tNone")
-        else:
-            print("Filter Options:", filter_string)
-
-        print(f"\nSearching through {total_rankings} shows...")
-
-        while True:
-            rankings_page = requests.get(url % i)
-            rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
-            rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
-
-            if i > total_rankings:
-                break
-
-            for ranking in rankings_soup:
-
-                i += 1
-
-                ranking_information = self.__get_tv_show_information(ranking)
-                show = Show(*ranking_information)
-
-                if year_filter is not None:
-                    if year_filter[0] == ">":
-                        if show.year[0] < year_filter[1]:
-                            continue
-                    elif year_filter[0] == "<":
-                        if show.year[0] > year_filter[1]:
-                            continue
-
-                if rating_filter is not None:
-                    if rating_filter[0] == ">":
-                        if show.rating < rating_filter[1]:
-                            continue
-                    elif rating_filter[0] == "<":
-                        if show.rating > rating_filter[1]:
-                            continue
-
-                if discontinued_filter is not None:
-                    if discontinued_filter == False:
-                        if show.discontinued != discontinued_filter:
-                            continue
-
-                shows.append(show)
-
-        print(f"Found {len(shows)} matches:\n")
-        return shows
+        return (year_filter, rating_filter, discontinued_filter)
