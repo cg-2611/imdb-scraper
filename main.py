@@ -43,33 +43,37 @@ def get_args() -> tuple:
 
 def print_movies(movies: list) -> None:
     if movies:
+        print(f"Found {len(movies)} matches:\n")
+
         max_length = max(len(movie.name) for movie in movies)
 
-    tab_characters = (max_length // 8) + 1
-    name_header = "Name" + ("\t" * tab_characters)
+        tab_characters = (max_length // 8) + 1
+        name_header = "Name" + ("\t" * tab_characters)
 
-    headings = f"\tRank\t {name_header} Year\t Rating Duration Cert.\t Votes\t Gross"
+        headings = f"\tRank\t {name_header} Year\t Rating Duration Cert.\t Votes\t Gross"
 
-    print(headings)
-    print()
+        print(headings)
+        print()
 
-    for i, movie in enumerate(movies):
-        if (len(movie.name) + 1) % 8 == 0:
-            name_string = movie.name + ("\t" * ((tab_characters - (len(movie.name) // 8)) - 1))
-        else:
-            name_string = movie.name + ("\t" * (tab_characters - (len(movie.name) // 8)))
+        for i, movie in enumerate(movies):
+            if (len(movie.name) + 1) % 8 == 0:
+                name_string = movie.name + ("\t" * ((tab_characters - (len(movie.name) // 8)) - 1))
+            else:
+                name_string = movie.name + ("\t" * (tab_characters - (len(movie.name) // 8)))
 
-        if len(str(movie.votes)) < 7:
-            votes_string = str(movie.votes) + "\t"
-        else:
-            votes_string = str(movie.votes)
+            if len(str(movie.votes)) < 7:
+                votes_string = str(movie.votes) + "\t"
+            else:
+                votes_string = str(movie.votes)
 
-        if movie.gross is not None:
-            gross_string = "$" + str(movie.gross)
-        else:
-            gross_string = str(movie.gross)
+            if movie.gross is not None:
+                gross_string = "$" + str(movie.gross)
+            else:
+                gross_string = str(movie.gross)
 
-        print(f"{i + 1}.\t{movie.rank}\t {name_string} {movie.year}\t {movie.rating}\t{movie.duration}\t {movie.certificate}\t {votes_string} {gross_string}")
+            print(f"{i + 1}.\t{movie.rank}\t {name_string} {movie.year}\t {movie.rating}\t{movie.duration}\t {movie.certificate}\t {votes_string} {gross_string}")
+    else:
+        print("No Matches")
 
 def print_shows(shows: list) -> None:
     if shows:

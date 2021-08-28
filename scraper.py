@@ -33,7 +33,6 @@ class IMDbScraper:
 
         self.limit = limit if limit > 1 else None
         self.genres = [genre for genre in self.__get_genres()]
-
         self.filter = filter
 
     def __get_url(self) -> str:
@@ -171,15 +170,23 @@ class IMDbScraper:
 
         return name_value, year_value, discontinued_value, rank_value, rating_value, certificate_value, votes_value
 
-    def __search_movies(self, lock, url, index, movies, filters) -> None:
+    def __search_movies(self, url: str, movies: list, filters: tuple, total: int) -> None:
+        current_thread = threading.current_thread()
+        index = int("".join(filter(str.isdigit, current_thread.name))) - 1
         start = (index * 50) + 1
+
         rankings_page = requests.get(url % start)
         rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
         rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
         year_filter, rating_filter, duration_filter = filters
 
+        i = 0
         for ranking in rankings_soup:
+            i += 1
+            if i > total:
+                break
+
             ranking_information = self.__get_movie_information(ranking)
             movie = Movie(*ranking_information)
 
@@ -207,8 +214,7 @@ class IMDbScraper:
                     if movie.duration > duration_filter[1]:
                         continue
 
-            with lock:
-                movies.append(movie)
+            movies.append(movie)
 
 
     def get_movies(self) -> list:
@@ -237,9 +243,9 @@ class IMDbScraper:
         print(f"\nSearching through {total_rankings} movies...")
 
         thread_number = total_rankings // 50 if total_rankings % 50 == 0 else (total_rankings // 50) + 1
-
-        lock = threading.Lock()
-        threads = [threading.Thread(target=self.__search_movies, args=(lock, url, i, movies, filters)) for i in range(thread_number)]
+        total = total_rankings - ((thread_number - 1) * 50)
+        threads = [threading.Thread(target=self.__search_movies, args=(url, movies, filters, 50)) for _ in range(thread_number - 1)]
+        threads.append(threading.Thread(target=self.__search_movies, args=(url, movies, filters, total)))
 
         for thread in threads:
             thread.start()
@@ -247,7 +253,8 @@ class IMDbScraper:
         for thread in threads:
             thread.join()
 
-        print(f"Found {len(movies)} matches:\n")
+        movies.sort(key=lambda movie: movie.rank)
+
         return movies
 
     def get_tv_shows(self) -> list:
