@@ -6,10 +6,6 @@ from enum import Enum
 from bs4 import BeautifulSoup
 from bs4 import PageElement
 
-from content import Movie
-from content import Show
-
-
 URL = "https://www.imdb.com/search/title/"
 
 
@@ -20,8 +16,50 @@ class Types(Enum):
     MOST_POPULAR = ["most-popular"]
 
 
+class Movie:
+    """
+    Movie class stores information about a movie.
+    """
+    def __init__(self, name: str, year: int, rank: int, rating: float, duration: int, certificate: str, votes: int, gross: int) -> None:
+        self.name = name
+        self.year = year
+        self.rank = rank
+        self.rating = rating
+        self.duration = duration
+        self.certificate = certificate
+        self.votes = votes
+        self.gross = gross
+
+
+class Show:
+    """
+    Show class stores information about a show.
+    """
+    def __init__(self, name: str, year: tuple, discontinued: bool, rank: int, rating: float, certificate: str, votes: int) -> None:
+        self.name = name
+        self.year = year
+        self.discontinued = discontinued
+        self.rank = rank
+        self.rating = rating
+        self.certificate = certificate
+        self.votes = votes
+
+
 class IMDbScraper:
+    """
+    IMDbScraper is a multithreaded web scraper that search for movies and tv shows on IMDb's website.
+    """
     def __init__(self, content_type: Types, ranking_type: Types, genre:str, votes:int, limit: int, filter: str) -> None:
+        """
+        Constructor for IMDbScraper, creates a new instance of an IMDbScraper class.
+
+        :param content_type: either Types.MOVIE or Types.TV_SHOW, and controls which specific web pages will be scraped
+        :param ranking_type: either Types.TOP_RATED or Types.MOST_POPULAR, and controls which type of rankings page will be searched
+        :param genre: the genre of content that will be searched for, can be None to search all genres
+        :param votes: the minimum number of votes that a movie or tv show will have to be considered in a search
+        :param limit: the number of movies or tv shows that will be considered when searching
+        :param filter: the filter options used to make the search more narrow
+        """
         self.content_type = content_type
         self.ranking_type = ranking_type
         self.genre = genre
@@ -32,38 +70,36 @@ class IMDbScraper:
             self.votes = votes if votes > 1 else 5000
 
         self.limit = limit if limit > 1 else None
-        self.genres = [genre for genre in self.__get_genres()]
         self.filter = filter
 
+        self.genres = [genre for genre in self.__get_genres()]
+
     def get_movies(self) -> list:
+        """
+        Creates and starts the threads used to search through the content rankings and performs the search.
+
+        :return: the list of movies that meet the search criteria
+        """
         movies = []
 
         url = self.__get_url()
-        total_rankings = self.__get_total_results(url, 1)
-        filters = self.__get_movie_filter_options()
-        year_filter, rating_filter, duration_filter = filters
-        filter_string = ""
+        search_total = self.__get_total_results(url)
+        filters = self.get_movie_filter_options()
 
-        if year_filter is not None:
-            filter_string += f"\n\tmovie year is {year_filter[0]} {year_filter[1]}"
+        # calculate the number of threads needed so that one thread will search one page,
+        # 50 is used since IMDb has 50 results per page
+        thread_number = search_total // 50 if search_total % 50 == 0 else (search_total // 50) + 1
 
-        if rating_filter is not None:
-            filter_string += f"\n\tmovie rating is {rating_filter[0]} {rating_filter[1]}"
+        # the maximum number of movies the final thread will search
+        # e.g. if the user is search through the top 75 movies, there will be two threads, the first searching through
+        # 50 movies, and the second searching through the reamining 25, the value of final_thread_total being 25
+        final_thread_total = search_total - ((thread_number - 1) * 50)
 
-        if duration_filter is not None:
-            filter_string += f"\n\tmovie duration is {duration_filter[0]} {duration_filter[1]}"
-
-        if not filter_string:
-            print("Filter Options:\n\tNone")
-        else:
-            print("Filter Options:", filter_string)
-
-        print(f"\nSearching through {total_rankings} movies...")
-
-        thread_number = total_rankings // 50 if total_rankings % 50 == 0 else (total_rankings // 50) + 1
-        total = total_rankings - ((thread_number - 1) * 50)
+        # create a list of threads that will search all 50 movies on each page
         threads = [threading.Thread(target=self.__search_movies, args=(url, movies, filters, 50)) for _ in range(thread_number - 1)]
-        threads.append(threading.Thread(target=self.__search_movies, args=(url, movies, filters, total)))
+
+        # append the final thread to the list that will search the final page
+        threads.append(threading.Thread(target=self.__search_movies, args=(url, movies, filters, final_thread_total)))
 
         for thread in threads:
             thread.start()
@@ -71,42 +107,36 @@ class IMDbScraper:
         for thread in threads:
             thread.join()
 
+        # sort the list of movies by the IMDb rank in the list of rankings
         movies.sort(key=lambda movie: movie.rank)
-
         return movies
 
     def get_tv_shows(self) -> list:
+        """
+        Creates and starts the threads used to search through the content rankings and performs the search.
+
+        :return: the list of shows that meet the search criteria
+        """
         shows = []
 
         url = self.__get_url()
-        total_rankings = self.__get_total_results(url, 1)
-        filters = self.__get_tv_show_filter_options()
-        year_filter, rating_filter, discontinued_filter = filters
-        filter_string = ""
+        total_rankings = self.__get_total_results(url)
+        filters = self.get_tv_show_filter_options()
 
-        if year_filter is not None:
-            filter_string += f"\n\tshow start year is {year_filter[0]} {year_filter[1]}"
-
-        if rating_filter is not None:
-            filter_string += f"\n\tshow rating is {rating_filter[0]} {rating_filter[1]}"
-
-        if discontinued_filter is not None:
-            if discontinued_filter != False:
-                filter_string += f"\n\tincluding discontinued shows"
-            else:
-                filter_string += f"\n\tnot including discontinued shows"
-
-        if not filter_string:
-            print("Filter Options:\n\tNone")
-        else:
-            print("Filter Options:", filter_string)
-
-        print(f"\nSearching through {total_rankings} shows...")
-
+        # calculate the number of threads needed so that one thread will search one page,
+        # 50 is used since IMDb has 50 results per page
         thread_number = total_rankings // 50 if total_rankings % 50 == 0 else (total_rankings // 50) + 1
-        total = total_rankings - ((thread_number - 1) * 50)
-        threads = [threading.Thread(target=self.__search_shows, args=(url, shows, filters, 50)) for _ in range(thread_number - 1)]
-        threads.append(threading.Thread(target=self.__search_shows, args=(url, shows, filters, total)))
+
+        # the maximum number of shows the final thread will search
+        # e.g. if the user is search through the top 75 shows, there will be two threads, the first searching through
+        # 50 shows, and the second searching through the reamining 25, the value of final_thread_total being 25
+        final_thread_total = total_rankings - ((thread_number - 1) * 50)
+
+        # create a list of threads that will search all 50 movies on each page
+        threads = [threading.Thread(target=self.__search_tv_shows, args=(url, shows, filters, 50)) for _ in range(thread_number - 1)]
+
+        # append the final thread to the list that will search the final page
+        threads.append(threading.Thread(target=self.__search_tv_shows, args=(url, shows, filters, final_thread_total)))
 
         for thread in threads:
             thread.start()
@@ -114,30 +144,105 @@ class IMDbScraper:
         for thread in threads:
             thread.join()
 
+        # sort the list of movies by the IMDb rank in the list of rankings
         shows.sort(key=lambda show: show.rank)
-
         return shows
 
+    def get_movie_filter_options(self) -> tuple:
+        """
+        Parses the movie filter options and creates a tuple of the useful information.
+
+        :return: tuple containing the filters that will be applied when searching through movies
+        """
+        year_filter, rating_filter, duration_filter, gross_filter = None, None, None, None
+
+        if self.filter is not None:
+            filter_options = self.filter.split()
+
+            for option in filter_options:
+                # option[1] contains either '<' or '>' and option[2:] will be the value
+
+                if option.startswith("y"):
+                    year_filter = [option[1], int(option[2:])]
+                    continue
+
+                if option.startswith("r"):
+                    rating_filter = [option[1], float(option[2:])]
+                    continue
+
+                if option.startswith("d"):
+                    duration_filter = [option[1], int(option[2:])]
+                    continue
+
+                if option.startswith("g"):
+                    gross_filter = [option[1], int(option[2:])]
+                    continue
+
+        return (year_filter, rating_filter, duration_filter, gross_filter)
+
+    def get_tv_show_filter_options(self) -> tuple:
+        """
+        Parses the movie filter options and creates a tuple of the useful information.
+
+        :return: tuple containing the filters that will be applied when searching through shows
+        """
+        year_filter, rating_filter, discontinued_filter = None, None, None
+
+        if self.filter is not None:
+            filter_options = self.filter.split()
+
+            for option in filter_options:
+
+                # for year and rating, option[1] contains either '<' or '>' and option[2:] will be the value
+                if option.startswith("y"):
+                    year_filter = [option[1], int(option[2:])]
+                    continue
+
+                if option.startswith("r"):
+                    rating_filter = [option[1], float(option[2:])]
+                    continue
+
+                # for discontinued filter, check the value after the '=' and return the corresponding boolean value
+                if option.startswith("d"):
+                    value_index = option.find("=")
+                    value = option[value_index + 1:]
+                    discontinued_filter = False if value == "False" else True
+                    continue
+
+        return (year_filter, rating_filter, discontinued_filter)
+
+    def get_search_total(self) -> int:
+        """
+        :return: the total number of movies or tv shows that will be searched through.
+        """
+        return self.__get_total_results(self.__get_url())
+
     def __search_movies(self, url: str, movies: list, filters: tuple, total: int) -> None:
+        # get the index of the current thread an use it to calculate which page the thread will be searching through
         current_thread = threading.current_thread()
         index = int("".join(filter(str.isdigit, current_thread.name))) - 1
         start = (index * 50) + 1
 
+        # perform the scraping on the page
         rankings_page = requests.get(url % start)
         rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
         rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
-        year_filter, rating_filter, duration_filter = filters
+        year_filter, rating_filter, duration_filter, gross_filter = filters
 
-        i = 0
+        searched = 0
         for ranking in rankings_soup:
-            i += 1
-            if i > total:
+            searched += 1
+            if searched > total:
                 break
 
+            # parse the ranking and extract the information
             ranking_information = self.__get_movie_information(ranking)
+
+            # create a Movie object to store the information
             movie = Movie(*ranking_information)
 
+            # check the filter criteria against the movie
             if year_filter is not None:
                 if year_filter[0] == ">":
                     if movie.year < year_filter[1]:
@@ -162,28 +267,46 @@ class IMDbScraper:
                     if movie.duration > duration_filter[1]:
                         continue
 
+            if gross_filter is not None:
+                if movie.gross is None:
+                    continue
+
+                if gross_filter[0] == ">":
+                    if movie.gross < gross_filter[1]:
+                        continue
+                elif gross_filter[0] == "<":
+                    if movie.gross > gross_filter[1]:
+                        continue
+
+            # if the movie meets all the criteria, append it to the list of movies
             movies.append(movie)
 
-    def __search_shows(self, url: str, shows: list, filters: tuple, total: int) -> None:
+    def __search_tv_shows(self, url: str, shows: list, filters: tuple, total: int) -> None:
+        # get the index of the current thread an use it to calculate which page the thread will be searching through
         current_thread = threading.current_thread()
         index = int("".join(filter(str.isdigit, current_thread.name))) - 1
         start = (index * 50) + 1
 
+        # perform the scraping on the page
         rankings_page = requests.get(url % start)
         rankings_list_soup = BeautifulSoup(rankings_page.text, "html.parser")
         rankings_soup = rankings_list_soup.find_all("div", class_="lister-item-content")
 
         year_filter, rating_filter, discontinued_filter = filters
 
-        i = 0
+        searched = 0
         for ranking in rankings_soup:
-            i += 1
-            if i > total:
+            searched += 1
+            if searched > total:
                 break
 
+            # parse the ranking and extract the information
             ranking_information = self.__get_tv_show_information(ranking)
+
+            # create a Show object to store the information
             show = Show(*ranking_information)
 
+            # check the filter criteria against the show
             if year_filter is not None:
                 if year_filter[0] == ">":
                     if show.year[0] < year_filter[1]:
@@ -205,9 +328,12 @@ class IMDbScraper:
                     if show.discontinued != discontinued_filter:
                         continue
 
+            # if the show meets all the criteria, append it to the list of movies
             shows.append(show)
 
     def __get_movie_information(self, movie_soup: PageElement) -> tuple:
+        # extract all the necessary information about a movie
+
         name = movie_soup.find("a")
         name_value = name.get_text().strip() if name is not None else None
 
@@ -237,6 +363,8 @@ class IMDbScraper:
         return name_value, year_value, rank_value, rating_value, duration_value, certificate_value, votes_value, gross_value
 
     def __get_tv_show_information(self, show_soup) -> tuple:
+        # extract all the necessary information about a tv show
+
         name = show_soup.find("a")
         name_value = name.get_text().strip() if name is not None else None
 
@@ -265,12 +393,14 @@ class IMDbScraper:
         return name_value, year_value, discontinued_value, rank_value, rating_value, certificate_value, votes_value
 
     def __get_url(self) -> str:
+        # return the url of the webpage to be scraped based on the attributes of the object
         if self.ranking_type == Types.TOP_RATED:
             return URL + f"?genres={self.genre}&sort=user_rating,desc&title_type={self.content_type.value[1]}&start=%d&num_votes={self.votes},"
         elif self.ranking_type == Types.MOST_POPULAR:
             return URL + f"?genres={self.genre}&title_type={self.content_type.value[1]}&start=%d&num_votes={self.votes},"
 
     def __get_genres(self) -> str:
+        # extract each genre from a list of genres on IMDb's website
         genre_table_soup = self.__get_genres_list()
         genre_list_soup = genre_table_soup.find_all("div", class_="table-cell primary")
 
@@ -278,66 +408,27 @@ class IMDbScraper:
             yield genre.find("a").get_text().strip().lower().replace(" ", "-")
 
     def __get_genres_list(self) -> str:
+        # get the html the genres page of IMDb to collect the lists of genres for each content type
         genre_page = requests.get("https://www.imdb.com/feature/genre/")
         genre_page_soup = BeautifulSoup(genre_page.text, "html.parser")
 
         genre_table_soup = genre_page_soup.find_all("div", class_="ab_links")
 
+        # return the list of genres relevant to the chosen content type
         if self.content_type == Types.MOVIE:
             return genre_table_soup[0]
         elif self.content_type == Types.TV_SHOW:
             return genre_table_soup[1]
 
-    def __get_total_results(self, url: str, start: int) -> int:
-        page_soup = BeautifulSoup(requests.get(url % start).text, "html.parser")
+    def __get_total_results(self, url: str) -> int:
+        # extract the total number of rnakings for the specified url and compare it to the limit attribute
+        page_soup = BeautifulSoup(requests.get(url % 1).text, "html.parser")
         total_string = page_soup.find("div", class_="desc").find("span").get_text().replace(",", "")
         total = int("".join(filter(str.isdigit, total_string[total_string.find("of "):])))
 
+        # if the limit attribute has a value, return the total number of rankings only if it is
+        # less than the limit attribute
         if self.limit is None:
             return total
         else:
             return total if total < self.limit else self.limit
-
-    def __get_movie_filter_options(self) -> tuple:
-        year_filter, rating_filter, duration_filter = None, None, None
-
-        if self.filter is not None:
-            filter_options = self.filter.split()
-
-            for option in filter_options:
-                if option.startswith("y"):
-                    year_filter = [option[1], int(option[2:])]
-                    continue
-
-                if option.startswith("r"):
-                    rating_filter = [option[1], float(option[2:])]
-                    continue
-
-                if option.startswith("d"):
-                    duration_filter = [option[1], int(option[2:])]
-                    continue
-
-        return (year_filter, rating_filter, duration_filter)
-
-    def __get_tv_show_filter_options(self) -> tuple:
-        year_filter, rating_filter, discontinued_filter = None, None, None
-
-        if self.filter is not None:
-            filter_options = self.filter.split()
-
-            for option in filter_options:
-                if option.startswith("y"):
-                    year_filter = [option[1], int(option[2:])]
-                    continue
-
-                if option.startswith("r"):
-                    rating_filter = [option[1], float(option[2:])]
-                    continue
-
-                if option.startswith("d"):
-                    value_index = option.find("=")
-                    value = option[value_index + 1:]
-                    discontinued_filter = False if value == "False" else True
-                    continue
-
-        return (year_filter, rating_filter, discontinued_filter)
