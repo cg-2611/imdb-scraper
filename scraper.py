@@ -21,6 +21,18 @@ class Movie:
     Movie class stores information about a movie.
     """
     def __init__(self, name: str, year: int, rank: int, rating: float, duration: int, certificate: str, votes: int, gross: int) -> None:
+        """
+        Constructor for Movie, creates a new instance of a Movie.
+
+        :param name: the name of the movie
+        :param year: the year the movie was released
+        :param rank: the imdb rank on the list of rankings of the movie
+        :param rating: the imdb rating of the movie
+        :param duration: the length of the movie in minutes
+        :param certificate: the certificate of the movie
+        :param votes: the number of votes the movie has
+        :param gross: the amount of money the movie grossed
+        """
         self.name = name
         self.year = year
         self.rank = rank
@@ -36,6 +48,17 @@ class Show:
     Show class stores information about a show.
     """
     def __init__(self, name: str, year: tuple, discontinued: bool, rank: int, rating: float, certificate: str, votes: int) -> None:
+        """
+        Constructor for Show, creates a new instance of a Show.
+
+        :param name: the name of the show
+        :param year: a tuple containing the year the show started airing and the year it stopped if applicable
+        :para discontinued: a boolean that represents whether or not the show is still running
+        :param rank: the imdb rank on the list of rankings of the show
+        :param rating: the imdb rating of the show
+        :param certificate: the certificate of the show
+        :param votes: the number of votes the show
+        """
         self.name = name
         self.year = year
         self.discontinued = discontinued
