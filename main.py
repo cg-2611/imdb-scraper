@@ -29,7 +29,7 @@ def get_args() -> tuple:
                            charts or the \"-p\" option for the {Types.MOST_POPULAR.value[0]} charts")
 
     genre_index = sys.argv.index("-g") if "-g" in sys.argv else -1
-    genre = sys.argv[genre_index + 1] if genre_index != -1 else None
+    genre = sys.argv[genre_index + 1].lower() if genre_index != -1 else None
 
     votes_index = sys.argv.index("-v") if "-v" in sys.argv else -1
     votes = int(sys.argv[votes_index + 1]) if votes_index != -1 else 0
@@ -158,6 +158,11 @@ def print_tv_shows(shows: list) -> None:
 def main() -> None:
     args = get_args()
     scraper = IMDbScraper(*args)
+
+    if scraper.genre is None or scraper.genre not in scraper.genres:
+        print("Genre: None")
+    else:
+        print(f"Genre: {scraper.genre}")
 
     if args[0] == Types.MOVIE:
         # print the valid filter options
