@@ -1,4 +1,4 @@
-# IMDB Web Scraper
+# IMDb Web Scraper
 
 This is a web scraper that extracts information about movies and tv shows from pages on [IMDb](https://www.imdb.com/).
 Multithreading is used to search through multiple sections concurrently and improve the search time. It can be used to collect films that meet the user's search criteria.
